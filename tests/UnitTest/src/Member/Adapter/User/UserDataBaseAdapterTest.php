@@ -1,0 +1,391 @@
+<?php
+namespace Marmot\Application\Member\Adapter\User;
+
+use PHPUnit\Framework\TestCase;
+
+use Marmot\Application\Member\Translator\UserDataBaseTranslator;
+use Marmot\Application\Member\Model\User;
+use Marmot\Application\Member\Adapter\User\Query\UserRowCacheQuery;
+use Marmot\Application\Member\Utils\ObjectGenerate;
+
+use Marmot\Core;
+
+use Prophecy\Argument;
+
+class UserDataBaseAdapterTest extends TestCase
+{
+    private $userRowCacheQuery;
+    private $userDataBaseTranslator;
+    private $childAdapter;
+
+    public function setUp()
+    {
+        $this->userRowCacheQuery = $this->prophesize(UserRowCacheQuery::class);
+        $this->userDataBaseTranslator = $this->prophesize(UserDataBaseTranslator::class);
+        $this->childAdapter = new class extends UserDataBaseAdapter{
+            public function getUserDataBaseTranslator() : UserDataBaseTranslator
+            {
+                return parent::getUserDataBaseTranslator();
+            }
+
+            public function getUserRowCacheQuery() : UserRowCacheQuery
+            {
+                return parent::getUserRowCacheQuery();
+            }
+        };
+    }
+
+    public function tearDown()
+    {
+        unset($this->userRowCacheQuery);
+        unset($this->userDataBaseTranslator);
+    }
+
+    public function testImplementsIUserAdapter()
+    {
+        $adapter = new UserDataBaseAdapter();
+        $this->assertInstanceOf('Marmot\Application\Member\Adapter\User\IUserAdapter', $adapter);
+    }
+
+    public function testGetUserDataBaseTranslator()
+    {
+        $this->assertInstanceOf(
+            'Marmot\Application\Member\Translator\UserDataBaseTranslator',
+            $this->childAdapter->getUserDataBaseTranslator()
+        );
+    }
+
+    public function testGetUserRowCacheQuery()
+    {
+        $this->assertInstanceOf(
+            'Marmot\Application\Member\Adapter\User\Query\UserRowCacheQuery',
+            $this->childAdapter->getUserRowCacheQuery()
+        );
+    }
+
+    public function testAddSuccess()
+    {
+        $lastInsertId = 5;
+
+        $user = $this->getMockBuilder(User::class)
+                     ->setMethods(['setId'])
+                     ->getMock();
+        $user->expects($this->once())->method('setId')->with($this->equalTo($lastInsertId));
+
+        $userTranslator = new UserDataBaseTranslator();
+        $userInfo = $userTranslator->objectToArray($user);
+
+        $this->userDataBaseTranslator->objectToArray(Argument::exact($user))
+                                    ->shouldBeCalledTimes(1)
+                                    ->willReturn($userInfo);
+        $this->userRowCacheQuery->add(Argument::exact($userInfo))
+                                ->willReturn($lastInsertId)
+                                ->shouldBeCalledTimes(1);
+
+        $adapter = $this->getMockBuilder(UserDataBaseAdapter::class)
+                        ->setMethods(['getUserRowCacheQuery', 'getUserDataBaseTranslator'])
+                        ->getMock();
+        $adapter->expects($this->once())
+            ->method('getUserDataBaseTranslator')
+            ->willReturn($this->userDataBaseTranslator->reveal());
+        $adapter->expects($this->once())
+            ->method('getUserRowCacheQuery')
+            ->willReturn($this->userRowCacheQuery->reveal());
+
+        $result = $adapter->add($user);
+        $this->assertTrue($result);
+    }
+
+    public function testAddFailure()
+    {
+        $user = $this->getMockBuilder(User::class)
+                     ->setMethods(['setId'])
+                     ->getMock();
+        $user->expects($this->exactly(0))->method('setId');
+
+        $userTranslator = new UserDataBaseTranslator();
+        $userInfo = $userTranslator->objectToArray($user);
+
+        $this->userDataBaseTranslator->objectToArray(Argument::exact($user))
+                                     ->shouldBeCalledTimes(1)
+                                     ->willReturn($userInfo);
+        $this->userRowCacheQuery->add(Argument::exact($userInfo))
+                                ->willReturn(0)
+                                ->shouldBeCalledTimes(1);
+
+        $adapter = $this->getMockBuilder(UserDataBaseAdapter::class)
+                        ->setMethods(['getUserRowCacheQuery', 'getUserDataBaseTranslator'])
+                        ->getMock();
+        $adapter->expects($this->once())
+            ->method('getUserDataBaseTranslator')
+            ->willReturn($this->userDataBaseTranslator->reveal());
+        $adapter->expects($this->once())
+            ->method('getUserRowCacheQuery')
+            ->willReturn($this->userRowCacheQuery->reveal());
+
+        $result = $adapter->add($user);
+
+        $this->assertEquals(0, $user->getId());
+        $this->assertFalse($result);
+    }
+
+    public function testUpdateSuccess()
+    {
+        $user = ObjectGenerate::generateUser(1);
+        $modifyKeys = array('nickName','realName');
+
+        $userTranslator = new UserDataBaseTranslator();
+        $userInfo = $userTranslator->objectToArray($user);
+
+        $userRowCacheQuery = new UserRowCacheQuery();
+
+        $this->userDataBaseTranslator->objectToArray(Argument::exact($user), Argument::exact($modifyKeys))
+                                     ->shouldBeCalledTimes(1)->willReturn($userInfo);
+        $this->userRowCacheQuery->getPrimaryKey()
+                                ->shouldBeCalledTimes(1)
+                                ->willReturn($userRowCacheQuery->getPrimaryKey());
+
+        $this->userRowCacheQuery->update(
+            Argument::exact($userInfo),
+            Argument::exact(array($userRowCacheQuery->getPrimaryKey()=>$user->getId()))
+        )->shouldBeCalledTimes(1)->willReturn(true);
+
+        $adapter = $this->getMockBuilder(UserDataBaseAdapter::class)
+                        ->setMethods(['getUserRowCacheQuery', 'getUserDataBaseTranslator'])
+                        ->getMock();
+        $adapter->expects($this->once())
+            ->method('getUserDataBaseTranslator')
+            ->willReturn($this->userDataBaseTranslator->reveal());
+        $adapter->expects($this->exactly(2))
+            ->method('getUserRowCacheQuery')
+            ->willReturn($this->userRowCacheQuery->reveal());
+
+        $result = $adapter->update($user, $modifyKeys);
+
+        $this->assertTrue($result);
+    }
+
+    public function testUpdateFailure()
+    {
+
+        $user = ObjectGenerate::generateUser(1);
+        $modifyKeys = array('nickName','realName');
+
+        $userTranslator = new UserDataBaseTranslator();
+        $userInfo = $userTranslator->objectToArray($user);
+
+        $userRowCacheQuery = new UserRowCacheQuery();
+
+        $this->userDataBaseTranslator->objectToArray(Argument::exact($user), Argument::exact($modifyKeys))
+                                     ->shouldBeCalledTimes(1)->willReturn($userInfo);
+        $this->userRowCacheQuery->getPrimaryKey()
+                                ->shouldBeCalledTimes(1)
+                                ->willReturn($userRowCacheQuery->getPrimaryKey());
+
+        $this->userRowCacheQuery->update(
+            Argument::exact($userInfo),
+            Argument::exact(array($userRowCacheQuery->getPrimaryKey()=>$user->getId()))
+        )->shouldBeCalledTimes(1)->willReturn(false);
+
+        $adapter = $this->getMockBuilder(UserDataBaseAdapter::class)
+                        ->setMethods(['getUserRowCacheQuery', 'getUserDataBaseTranslator'])
+                        ->getMock();
+        $adapter->expects($this->once())
+            ->method('getUserDataBaseTranslator')
+            ->willReturn($this->userDataBaseTranslator->reveal());
+        $adapter->expects($this->exactly(2))
+            ->method('getUserRowCacheQuery')
+            ->willReturn($this->userRowCacheQuery->reveal());
+
+        $result = $adapter->update($user, $modifyKeys);
+
+        $this->assertFalse($result);
+    }
+
+    public function testGetOneNotExist()
+    {
+        $userId = 1;
+        $adapter = new UserDataBaseAdapter();
+
+        $this->userRowCacheQuery->getOne(Argument::exact($userId))->shouldBeCalledTimes(1)->willReturn(array());
+        $this->userDataBaseTranslator->arrayToObject()->shouldNotBeCalled();
+
+        $adapter = $this->getMockBuilder(UserDataBaseAdapter::class)
+                        ->setMethods(['getUserRowCacheQuery', 'getUserDataBaseTranslator'])
+                        ->getMock();
+        $adapter->expects($this->exactly(0))
+            ->method('getUserDataBaseTranslator')
+            ->willReturn($this->userDataBaseTranslator->reveal());
+        $adapter->expects($this->exactly(1))
+            ->method('getUserRowCacheQuery')
+            ->willReturn($this->userRowCacheQuery->reveal());
+
+        $result = $adapter->getOne($userId);
+        $this->assertInstanceOf('Marmot\Application\Member\Model\NullUser', $result);
+        $this->assertEquals(RESOURCE_NOT_EXIST, Core::getLastError()->getId());
+    }
+
+    public function testGetOneExist()
+    {
+        $userId = 1;
+        $adapter = new UserDataBaseAdapter();
+
+        $user = ObjectGenerate::generateUser(1);
+        $userDataBaseTranslator = new UserDataBaseTranslator();
+        $userInfo = $userDataBaseTranslator->objectToArray($user);
+
+        $this->userRowCacheQuery->getOne(Argument::exact($userId))
+                                ->shouldBeCalledTimes(1)
+                                ->willReturn($userInfo);
+        $this->userDataBaseTranslator->arrayToObject(Argument::exact($userInfo))
+                                     ->shouldBeCalledTimes(1)
+                                     ->willReturn($user);
+
+        $adapter = $this->getMockBuilder(UserDataBaseAdapter::class)
+                        ->setMethods(['getUserRowCacheQuery', 'getUserDataBaseTranslator'])
+                        ->getMock();
+        $adapter->expects($this->exactly(1))
+            ->method('getUserDataBaseTranslator')
+            ->willReturn($this->userDataBaseTranslator->reveal());
+        $adapter->expects($this->exactly(1))
+            ->method('getUserRowCacheQuery')
+            ->willReturn($this->userRowCacheQuery->reveal());
+
+        $result = $adapter->getOne($userId);
+        $this->assertSame($user, $result);
+    }
+
+    public function testGetListNotExist()
+    {
+        $userIds = array(1,2,3);
+        $adapter = new UserDataBaseAdapter();
+
+        $this->userRowCacheQuery->getList(Argument::exact($userIds))->shouldBeCalledTimes(1)->willReturn(array());
+        $this->userDataBaseTranslator->arrayToObject()->shouldNotBeCalled();
+
+        $adapter = $this->getMockBuilder(UserDataBaseAdapter::class)
+                        ->setMethods(['getUserRowCacheQuery', 'getUserDataBaseTranslator'])
+                        ->getMock();
+        $adapter->expects($this->exactly(0))
+            ->method('getUserDataBaseTranslator')
+            ->willReturn($this->userDataBaseTranslator->reveal());
+        $adapter->expects($this->exactly(1))
+            ->method('getUserRowCacheQuery')
+            ->willReturn($this->userRowCacheQuery->reveal());
+
+        $result = $adapter->getList($userIds);
+        $this->assertEmpty($result);
+    }
+
+    public function testGetListExist()
+    {
+        $userIds = array(1,2,3);
+        $adapter = new UserDataBaseAdapter();
+        $userDataBaseTranslator = new UserDataBaseTranslator();
+        $userObjects = $userInfoList = array();
+
+        foreach ($userIds as $userId) {
+            $user = ObjectGenerate::generateUser($userId);
+            $userInfo = $userDataBaseTranslator->objectToArray($user);
+            $userObjects[] = $user;
+            $userInfoList[] = $userInfo;
+            $this->userDataBaseTranslator->arrayToObject($userInfo)->shouldBeCalledTimes(1)->willReturn($user);
+        }
+
+        $this->userRowCacheQuery->getList(Argument::exact($userIds))->shouldBeCalledTimes(1)->willReturn($userInfoList);
+
+        $adapter = $this->getMockBuilder(UserDataBaseAdapter::class)
+                        ->setMethods(['getUserRowCacheQuery', 'getUserDataBaseTranslator'])
+                        ->getMock();
+        $adapter->expects($this->once())
+            ->method('getUserDataBaseTranslator')
+            ->willReturn($this->userDataBaseTranslator->reveal());
+        $adapter->expects($this->exactly(1))
+            ->method('getUserRowCacheQuery')
+            ->willReturn($this->userRowCacheQuery->reveal());
+
+        $result = $adapter->getList($userIds);
+        $this->assertSame($userObjects, $result);
+    }
+
+    public function testFilterWithEmptyResult()
+    {
+        $this->userRowCacheQuery->find(
+            Argument::exact(' 1 '),
+            Argument::exact(0),
+            Argument::exact(20)
+        )->shouldBeCalledTimes(1)->willReturn(array());
+
+        $this->userRowCacheQuery->getPrimaryKey()->shouldNotBeCalled();
+        $this->userRowCacheQuery->count(Argument::type('string'))->shouldNotBeCalled();
+
+        $adapter = $this->getMockBuilder(UserDataBaseAdapter::class)
+                        ->setMethods(['getList'])
+                        ->getMock();
+        $adapter->expects($this->exactly(0))
+                ->method('getList');
+
+        $adapter = $this->getMockBuilder(UserDataBaseAdapter::class)
+                        ->setMethods(['getUserRowCacheQuery', 'getUserDataBaseTranslator'])
+                        ->getMock();
+        $adapter->expects($this->exactly(0))
+            ->method('getUserDataBaseTranslator')
+            ->willReturn($this->userDataBaseTranslator->reveal());
+        $adapter->expects($this->exactly(1))
+            ->method('getUserRowCacheQuery')
+            ->willReturn($this->userRowCacheQuery->reveal());
+
+        $result = $adapter->filter();
+        $this->assertEquals(array(array(), 0), $result);
+    }
+
+    private function generateUserIds(int $number = 20) : array
+    {
+        $userRowCacheQuery = new UserRowCacheQuery();
+        $primaryKey = $userRowCacheQuery->getPrimaryKey();
+
+        $userIds = $userIdsFormat = array();
+
+        for ($i=0; $i<$number; $i++) {
+            $userIds[] = $i;
+            $userIdsFormat[] = [$primaryKey=>$i];
+        }
+
+        return array($userIds, $userIdsFormat);
+    }
+
+    public function testFilterWithEmptyFilterCondition()
+    {
+        $filter = $sort = array();
+
+        $userRowCacheQuery = new UserRowCacheQuery();
+        $primaryKey = $userRowCacheQuery->getPrimaryKey();
+        list($userIds, $userIdsFormat) = $this->generateUserIds();
+
+        $this->userRowCacheQuery->find(
+            Argument::exact(' 1 '),
+            Argument::exact(0),
+            Argument::exact(20)
+        )->shouldBeCalledTimes(1)->willReturn($userIdsFormat);
+
+        $this->userRowCacheQuery->getPrimaryKey()->shouldBeCalledTimes(1)->willReturn($primaryKey);
+        $this->userRowCacheQuery->count(Argument::exact(' 1 '))->shouldBeCalledTimes(1)->willReturn(sizeof($userIds));
+
+        $adapter = $this->getMockBuilder(UserDataBaseAdapter::class)
+                        ->setMethods(['getUserRowCacheQuery', 'getList'])
+                        ->getMock();
+        $adapter->expects($this->exactly(1))
+            ->method('getUserRowCacheQuery')
+            ->willReturn($this->userRowCacheQuery->reveal());
+        $adapter->expects($this->exactly(1))
+                ->method('getList')
+                ->with($this->equalTo($userIds))
+                ->will($this->returnArgument(0));
+
+        
+        list($userList, $count) = $adapter->filter();
+
+        $this->assertEquals($userIds, $userList);
+        $this->assertEquals(sizeof($userIds), $count);
+    }
+}

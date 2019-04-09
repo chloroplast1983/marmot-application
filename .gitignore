@@ -1,0 +1,9 @@
+.DS_Store
+vendor
+*.xmind
+utc
+config.dev.php
+route.cache
+cache/proxies/*.php
+public/index.php
+config.test.php
