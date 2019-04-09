@@ -3,6 +3,8 @@ namespace Marmot\Application;
 
 use Marmot\Framework\Application\IApplication;
 
+define('APPLICATION_ROOT', dirname(__FILE__) . DIRECTORY_SEPARATOR);
+
 class Application implements IApplication
 {
     public function getIndexRoute() : array
@@ -12,21 +14,21 @@ class Application implements IApplication
 
     public function getRouteRules() : array
     {
-        return include 'routeRules.php';
+        return include_once APPLICATION_ROOT.'routeRules.php';
     }
 
     public function initErrorConfig() : void
     {
-        include 'errorConfig.php';
+        include_once APPLICATION_ROOT.'errorConfig.php';
     }
 
     public function getErrorDescriptions() : array
     {
-        return include 'errorDescriptionConfig.php';
+        return include_once APPLICATION_ROOT.'./errorDescriptionConfig.php';
     }
 
     public function initConfig() : void
     {
-        include 'config.php';
+        include_once APPLICATION_ROOT.'config.php';
     }
 }
