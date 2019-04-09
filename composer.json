@@ -11,7 +11,7 @@
         }
     ],
     "require": {
-        "chloroplast/marmot-framework": "1.0",
+        "chloroplast/marmot-framework": "0.1",
         "fzaninotto/faker": "1.7.1"
     },
     "require-dev": {
