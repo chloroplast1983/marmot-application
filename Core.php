@@ -127,9 +127,26 @@ class Core extends MarmotCore
      */
     protected function initDb()
     {
+        parent::initMysql();
     }
 
     protected function initCache()
     {
+        parent::initMemcached(self::$container->get('memcached.serevice'));
+    }
+
+    protected function initHook() : void
+    {
+        $this->initSmarty();
+    }
+
+    private function initSmarty()
+    {
+        $smarty = \Marmot\Framework\View\Smarty::getInstance();
+
+        //smarty config
+        $smarty->setTemplateDir($this->getAppPath().'src/View/Smarty/Templates');
+        $smarty->setCompileDir($this->getAppPath().'cache/Smarty/Compile');
+        $smarty->setCacheDir($this->getAppPath().'cache/Smarty/Cache');
     }
 }

@@ -4,6 +4,8 @@ namespace Marmot\Application\Home\Controller;
 use Marmot\Framework\Classes\Controller;
 use Marmot\Core;
 
+use Marmot\Application\Home\View\Template\TestView;
+
 class IndexController extends Controller
 {   
     /**
@@ -22,5 +24,11 @@ class IndexController extends Controller
     {
         $this->displayError();
         return false;
+    }
+
+    public function test()
+    {
+        $this->render(new TestView(array('test'=>'test')));
+        return true;
     }
 }

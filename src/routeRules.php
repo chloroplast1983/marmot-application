@@ -4,6 +4,15 @@
  * 路由设置
  */
 return [
+    //获取视图view
+    [
+        'method'=>'GET',
+        'rule'=>'/test',
+        'controller'=>[
+            'Marmot\Application\Home\Controller\IndexController',
+            'test'
+        ]
+    ],
     //user 用户
     //获取用户详情接口
     [
@@ -32,7 +41,7 @@ return [
     ],
     //注册
     [
-        'method'=>'POST',
+        'method'=>['POST','DELETE'],
         'rule'=>'/users',
         'controller'=>[
             'Marmot\Application\Member\Controller\UserController',
